@@ -17,6 +17,6 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-add_executable(Examples "Examples.cpp" "Profiler.h" "RepetitionTester.h")
+add_executable(Examples "Examples.cpp" "Profiler.h" "RepetitionTester.h"  "HoistingSamples.cpp")
 set_property(TARGET Examples PROPERTY CXX_STANDARD 20)
 target_link_libraries(Examples PRIVATE nanobench gtest_main)

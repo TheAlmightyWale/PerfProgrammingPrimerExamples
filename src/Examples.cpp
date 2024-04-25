@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <nanobench.h>
 #include <random>
+#include <memory_resource>
 #include "RepetitionTester.h"
+#include "HoistingSamples.cpp"
 
 namespace Bench = ankerl::nanobench;
 
@@ -121,6 +123,12 @@ struct kv
 	Junk j;
 };
 
+struct kv_soa
+{
+	std::vector<uint32_t> keys;
+	std::vector<Junk> j;
+};          
+
 bool Search(kv* data, uint32_t target)
 {
 	for (uint32_t i = 0; i < k_arraySize; i++)
@@ -130,12 +138,6 @@ bool Search(kv* data, uint32_t target)
 
 	return false;
 }
-
-struct kv_soa
-{
-	std::vector<uint32_t> keys;
-	std::vector<Junk> j;
-};
 
 bool Search(uint32_t* keyArray, uint32_t target)
 {
@@ -189,6 +191,12 @@ struct kvp
 	std::shared_ptr<uint32_t> pData;
 };
 
+struct kvp_soa
+{
+	std::vector<uint32_t> keys;
+	std::vector<std::shared_ptr<uint32_t>> data;
+};
+
 bool Search(kvp* data, uint32_t target)
 {
 	for (uint32_t i = 0; i < k_arraySize; i++)
@@ -198,12 +206,6 @@ bool Search(kvp* data, uint32_t target)
 
 	return false;
 }
-
-struct kvp_soa
-{
-	std::vector<uint32_t> keys;
-	std::vector<std::shared_ptr<uint32_t>> data;
-};
 
 TEST(StructureOfArrays, ArrayOfStructsPointer)
 {
@@ -308,24 +310,22 @@ TEST(Allocators, defaultAllocator)
 
 TEST(Allocators, poolAllocator)
 {
-	std::pmr::pool_options options;
-	options.max_blocks_per_chunk = 100; //Maximum number of blocks allocated at once when requesting a new chunk
-	options.largest_required_pool_block = sizeof(Junk);
-	std::pmr::unsynchronized_pool_resource memoryPool{ options };
-
 	Bench::Bench().minEpochIterations(1000).run("Pool Allocator", [&] {
+		std::pmr::pool_options options;
+		options.max_blocks_per_chunk = 100; //Maximum number of blocks allocated at once when requesting a new chunk
+		options.largest_required_pool_block = sizeof(Junk);
+		std::pmr::unsynchronized_pool_resource memoryPool{ options };
+
 		//Initialize and destruct vector within scope
 		std::vector<Junk, std::pmr::polymorphic_allocator<Junk>> vector{ &memoryPool };
 		vector.resize(k_vectorSize);
 	});
 }
 
-//Why so slow???
 TEST(Allocators, monotonicAllocator)
 {
-	std::pmr::monotonic_buffer_resource buffer{ k_vectorSize * sizeof(Junk) };
-
 	Bench::Bench().minEpochIterations(1000).run("Monotonic Allocator", [&] {
+		std::pmr::monotonic_buffer_resource buffer{ k_vectorSize * sizeof(Junk) };
 		std::vector<Junk, std::pmr::polymorphic_allocator<Junk>> vector{ &buffer };
 		vector.resize(k_vectorSize);
 	});
