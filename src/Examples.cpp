@@ -248,25 +248,89 @@ TEST(StructureOfArrays, StructureOfArraysPointer)
 // and if we do have to have a low level branch then the data that we are branching on helps the branch predictor as much as possible
 // Ideally we remove branches in general and operate with masking operations
 
+constexpr uint32_t k_branchArraySize = 100'000;
+
 //low-level unsorted branch
+TEST(Hoisting, randomBranching)
+{
+	std::mt19937 generator(k_randomSeed);
+	uint32_t data[k_branchArraySize];
+
+	for (uint32_t i = 0; i < k_branchArraySize; i++)
+	{
+		data[i] = GenerateInRange(generator, 0, 10'000);
+	}
+
+	uint64_t sum = 0;
+
+	Bench::Bench().minEpochIterations(1000).run("randomBranching", [&]
+	{
+		for (uint32_t i = 0; i < k_branchArraySize; i++)
+		{
+			if (data[i] > 5'000) sum++;
+		}
+	});
+}
 
 //sorted branch
+TEST(Hoisting, sortedBranch)
+{
+	std::mt19937 generator(k_randomSeed);
+	uint32_t data[k_branchArraySize];
 
-//higher level branch (essentially sorted)
+	for (uint32_t i = 0; i < k_branchArraySize; i++)
+	{
+		data[i] = GenerateInRange(generator, 0, 10'000);
+	}
 
-//masked operations
+	std::sort(data, data + k_branchArraySize);
 
+	uint64_t sum = 0;
 
-//std_polymorphic_allocator
-//pool, monotonic examples
+	Bench::Bench().minEpochIterations(1000).run("sortedBranching", [&]
+	{
+		for (uint32_t i = 0; i < k_branchArraySize; i++)
+		{
+			if (data[i] > 5'000) sum++;
+		}
+	});
+}
 
-//pre-allocate pool
-//do a bunch of adds and removes
+constexpr uint32_t k_vectorSize = 10'000;
 
-//vanilla vector compare
+TEST(Allocators, defaultAllocator)
+{
+	Bench::Bench().minEpochIterations(1000).run("Default Allocator", [&] {
+		std::vector<Junk> vector;
+		vector.resize(k_vectorSize);
+	});
+}
 
-//monotonic
-//compare destruction
+TEST(Allocators, poolAllocator)
+{
+	std::pmr::pool_options options;
+	options.max_blocks_per_chunk = 100; //Maximum number of blocks allocated at once when requesting a new chunk
+	options.largest_required_pool_block = sizeof(Junk);
+	std::pmr::unsynchronized_pool_resource memoryPool{ options };
+
+	Bench::Bench().minEpochIterations(1000).run("Pool Allocator", [&] {
+		//Initialize and destruct vector within scope
+		std::vector<Junk, std::pmr::polymorphic_allocator<Junk>> vector{ &memoryPool };
+		vector.resize(k_vectorSize);
+	});
+}
+
+//Why so slow???
+TEST(Allocators, monotonicAllocator)
+{
+	std::pmr::monotonic_buffer_resource buffer{ k_vectorSize * sizeof(Junk) };
+
+	Bench::Bench().minEpochIterations(1000).run("Monotonic Allocator", [&] {
+		std::vector<Junk, std::pmr::polymorphic_allocator<Junk>> vector{ &buffer };
+		vector.resize(k_vectorSize);
+	});
+
+}
 
 
 
